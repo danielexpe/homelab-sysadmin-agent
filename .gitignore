@@ -1,0 +1,15 @@
+# Segredos e Chaves
+.env
+ssh_keys/id_*
+ssh_keys/*.pem
+!ssh_keys/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Docker
+.docker/

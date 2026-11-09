@@ -1,0 +1,11 @@
+services:
+  sysadmin-agent:
+    build: .
+    container_name: homelab-sysadmin-agent
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./ssh_keys:/root/.ssh:ro
