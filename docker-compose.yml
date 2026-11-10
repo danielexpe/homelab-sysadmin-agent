@@ -1,9 +1,24 @@
 services:
+# Serviço 1: Homelab Bot (Atualizações e checagem de containers)
+  homelab-bot:
+    build: .
+    container_name: homelab-bot
+    restart: unless-stopped
+    network_mode: "host"
+    command: ["python", "src/bot.py"]
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./ssh_keys:/root/.ssh:ro
+
+  # Serviço 2: SysAdmin Agent (Agente Autônomo com comandos arbitrários e PVE API)
   sysadmin-agent:
     build: .
     container_name: homelab-sysadmin-agent
     restart: unless-stopped
     network_mode: "host"
+    command: ["python", "src/sysadmin_agent.py"]
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
