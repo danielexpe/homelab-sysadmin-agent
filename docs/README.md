@@ -3,7 +3,7 @@
 | Documento | Conteúdo |
 | :--- | :--- |
 | [`SPEC_REGRESSAO.md`](SPEC_REGRESSAO.md) | Contrato do comportamento atual, matriz de testes e critérios de regressão |
-| [`MELHORIAS.md`](MELHORIAS.md) | Índice de melhorias planejadas e backlog candidato |
+| [`MELHORIAS.md`](MELHORIAS.md) | Prioridade atual, riscos aceitos e backlog futuro |
 | [`specs/01-log-auditoria-local.md`](specs/01-log-auditoria-local.md) | Especificação do log local de prompts, respostas e comandos executados |
 
 ## Ordem de leitura sugerida
