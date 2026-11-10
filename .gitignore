@@ -13,3 +13,6 @@ venv/
 
 # Docker
 .docker/
+
+# Logs de auditoria local
+logs/

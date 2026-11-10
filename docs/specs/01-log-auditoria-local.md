@@ -1,5 +1,9 @@
 # Especificação 01 - Log de Auditoria Local
 
+**Status:** implementado
+**Implementação:** `src/audit.py`; integração em `src/sysadmin_agent.py` e `src/bot.py`; volume `./logs:/app/logs` no Compose
+**Testes:** `tests/test_audit.py` e `tests/test_agent_logging.py`
+
 ## 1. Objetivo
 
 Registrar localmente, de forma estruturada e persistente, todo o ciclo de atendimento dos bots:
@@ -36,6 +40,7 @@ O log deve permitir responder, para qualquer atendimento: **quem pediu o quê, q
 - Codificação: UTF-8, sem escape desnecessário (`ensure_ascii=False`).
 - Nome padrão: `audit.jsonl`.
 - Diretório padrão: `/app/logs`.
+- No Compose, cada serviço usa um arquivo distinto: `sysadmin-agent.jsonl` e `homelab-bot.jsonl`.
 - Rotação padrão: diária à meia-noite; arquivos rotacionados recebem sufixo de data (`audit.jsonl.YYYY-MM-DD`).
 - Retenção padrão: `0` = manter indefinidamente.
 - Cada linha deve terminar com `\n` e ser gravada com `flush` antes de considerar o evento persistido.
@@ -213,6 +218,8 @@ Antes da execução de uma ferramenta.
   "arguments": {"target": "proxmox", "command": "pct exec 101 -- df -h"}
 }
 ```
+
+Os argumentos de `write_file` não incluem o campo `content`; em seu lugar são registrados `content_size` e `content_sha256`.
 
 #### `command_result`
 

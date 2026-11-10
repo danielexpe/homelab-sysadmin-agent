@@ -8,9 +8,12 @@ services:
     command: ["python", "src/bot.py"]
     environment:
       - PYTHONUNBUFFERED=1
+      - AUDIT_LOG_DIR=/app/logs
+      - AUDIT_LOG_FILE=homelab-bot.jsonl
     volumes:
       - ./.env:/app/.env:ro
       - ./ssh_keys:/root/.ssh:ro
+      - ./logs:/app/logs
 
   # Serviço 2: SysAdmin Agent (Agente Autônomo com comandos arbitrários e PVE API)
   sysadmin-agent:
@@ -21,6 +24,9 @@ services:
     command: ["python", "src/sysadmin_agent.py"]
     environment:
       - PYTHONUNBUFFERED=1
+      - AUDIT_LOG_DIR=/app/logs
+      - AUDIT_LOG_FILE=sysadmin-agent.jsonl
     volumes:
       - ./.env:/app/.env:ro
       - ./ssh_keys:/root/.ssh:ro
+      - ./logs:/app/logs

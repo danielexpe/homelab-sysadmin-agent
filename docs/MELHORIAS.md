@@ -6,17 +6,19 @@ Este documento é o índice das melhorias do Homelab SysAdmin Agent. Cada item d
 
 | Ordem | Grupo | Decisão |
 | :---: | :--- | :--- |
-| 1 | Log de auditoria local | Primeira prioridade de implementação |
+| 1 | Log de auditoria local | Implementado |
 | 2 | Riscos aceitos `RA-01` e `RA-02` | Não serão implementados; risco aceito pelo proprietário do projeto |
 | 3 | Backlog futuro `B-01` a `B-09` | Documentados para etapas futuras, sem data definida |
 
 Os riscos aceitos permanecem registrados para rastreabilidade e revisão futura, mas **não fazem parte do backlog de implementação**.
 
-## 2. Log de auditoria local (P0)
+## 2. Log de auditoria local (P0) - concluído
 
-**Status:** primeira prioridade; especificação pronta, implementação pendente
+**Status:** implementado
 **Prioridade:** P0
 **Especificação:** [`specs/01-log-auditoria-local.md`](specs/01-log-auditoria-local.md)
+**Implementação:** `src/audit.py`, integração em `src/sysadmin_agent.py` e `src/bot.py`, volume `./logs:/app/logs` no Compose
+**Testes:** `python3 -m unittest discover -s tests -v`
 
 ### Objetivo
 

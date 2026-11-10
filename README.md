@@ -34,11 +34,21 @@ homelab-sysadmin-agent/
 ├── docker-compose.yml
 ├── requirements.txt
 ├── README.md
+├── docs/
+│   ├── MELHORIAS.md
+│   ├── README.md
+│   ├── SPEC_REGRESSAO.md
+│   └── specs/
+├── logs/              # gerado em runtime, fora do Git
 ├── ssh_keys/
 │   └── README.md
-└── src/
-    ├── bot.py
-    └── sysadmin_agent.py
+├── src/
+│   ├── audit.py
+│   ├── bot.py
+│   └── sysadmin_agent.py
+└── tests/
+    ├── test_agent_logging.py
+    └── test_audit.py
 ```
 
 ## Como Usar
@@ -61,6 +71,23 @@ nano .env
 > **Atenção:** não reutilize o mesmo token em `SYSADMIN_BOT_TOKEN` e `TELEGRAM_BOT_TOKEN` com os dois serviços ativos. Dois processos fazendo `getUpdates` com o mesmo token causam o erro `409 Conflict`.
 >
 > O `homelab-bot` possui `ALLOWED_USER_ID`, `PROXMOX_HOST` e a lista `ALLOWED_TARGETS` (VMs/LXCs permitidos) definidos diretamente em `src/bot.py`. Ajuste-os no código antes do deploy.
+
+#### Log de auditoria local
+
+Os dois serviços gravam eventos em JSON Lines no diretório `./logs`, montado em `/app/logs`:
+
+| Variável | Padrão | Descrição |
+| :--- | :--- | :--- |
+| `AUDIT_LOG_ENABLED` | `true` | Liga/desliga o log de auditoria |
+| `AUDIT_LOG_DIR` | `/app/logs` | Diretório dos arquivos |
+| `AUDIT_LOG_FILE` | `audit.jsonl` | Nome do arquivo; no Compose é definido por serviço |
+| `AUDIT_LOG_RETENTION_DAYS` | `0` | Dias de retenção; `0` mantém tudo |
+| `AUDIT_LOG_MAX_FIELD_CHARS` | `20000` | Limite de prompts, respostas e saídas |
+| `AUDIT_LOG_CAPTURE_OUTPUT` | `true` | Inclui `stdout`/`stderr` dos comandos |
+| `AUDIT_LOG_CAPTURE_DENIED` | `false` | Inclui o texto de usuários não autorizados |
+| `AUDIT_LOG_REDACT` | `true` | Redige tokens, chaves e senhas |
+
+No Compose, os arquivos são `logs/sysadmin-agent.jsonl` e `logs/homelab-bot.jsonl`. O log contém prompts, respostas e comandos executados; trate-o como dado sensível.
 
 ### 2. Configurar Chaves SSH
 Copie a chave privada SSH autorizada no Proxmox e nos hosts da LAN para a pasta `ssh_keys/`:
@@ -88,6 +115,27 @@ docker compose logs -f
 # Logs de um serviço específico
 docker compose logs -f sysadmin-agent
 docker compose logs -f homelab-bot
+
+# Log de auditoria local
+tail -n 20 ./logs/sysadmin-agent.jsonl
+tail -n 20 ./logs/homelab-bot.jsonl
+
+# Apenas comandos executados (requer jq)
+jq -c 'select(.event=="command_result") | {ts,target,command,exit_code}' ./logs/sysadmin-agent.jsonl
+```
+
+Para filtrar um atendimento específico, use o `correlation_id` retornado no evento `message_received`:
+
+```bash
+jq -c 'select(.correlation_id=="<id>")' ./logs/sysadmin-agent.jsonl
+```
+
+### 5. Executar Testes
+
+Os testes usam apenas a biblioteca padrão do Python e não precisam de Telegram ou Proxmox:
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
 ---
@@ -138,3 +186,4 @@ docker compose logs -f homelab-bot
 - O agente executa comandos no host do Proxmox e em nós da LAN com privilégios administrativos (`root`). Nunca compartilhe os bots do Telegram com terceiros.
 - O `homelab-bot` expõe apenas as ferramentas `run_system_update` e `check_disk_usage`, limitadas aos IDs em `ALLOWED_TARGETS`; ainda assim, revise essa lista antes do deploy.
 - Mantenha a chave privada devidamente protegida e nunca comite arquivos `.env` ou pastas `ssh_keys/` no repositório Git (já configurado no `.gitignore`).
+- Os arquivos em `logs/` contêm prompts, respostas e saídas de comandos. Aplique permissões restritas, não os versione e defina uma política de retenção adequada.

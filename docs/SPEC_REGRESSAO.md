@@ -47,10 +47,39 @@ O `homelab-bot` **não** lê essas variáveis de usuário do `.env`: `ALLOWED_US
 ### 3.3 Docker Compose
 
 - Ambos os serviços usam `network_mode: "host"`.
-- Ambos montam `./.env:/app/.env:ro` e `./ssh_keys:/root/.ssh:ro`.
+- Ambos montam `./.env:/app/.env:ro`, `./ssh_keys:/root/.ssh:ro` e `./logs:/app/logs`.
 - `restart: unless-stopped`.
 - `PYTHONUNBUFFERED=1`.
+- `AUDIT_LOG_DIR=/app/logs` e um `AUDIT_LOG_FILE` distinto por serviço.
 - Imagem única construída pelo `Dockerfile` (`python:3.12-alpine` + `openssh-client`, `tzdata`, `bash`).
+
+### 3.4 Log de auditoria
+
+| Variável | Padrão | Efeito |
+| :--- | :--- | :--- |
+| `AUDIT_LOG_ENABLED` | `true` | Liga/desliga a gravação |
+| `AUDIT_LOG_DIR` | `/app/logs` | Diretório dos arquivos |
+| `AUDIT_LOG_FILE` | `audit.jsonl` | Nome do arquivo ativo |
+| `AUDIT_LOG_RETENTION_DAYS` | `0` | Dias de retenção; `0` mantém tudo |
+| `AUDIT_LOG_MAX_FIELD_CHARS` | `20000` | Truncamento de campos textuais |
+| `AUDIT_LOG_CAPTURE_OUTPUT` | `true` | Inclui `stdout`/`stderr` |
+| `AUDIT_LOG_CAPTURE_DENIED` | `false` | Inclui texto de usuários não autorizados |
+| `AUDIT_LOG_REDACT` | `true` | Redige segredos |
+
+Requisitos de regressão do log:
+
+| ID | Requisito |
+| :--- | :--- |
+| R-AUD-01 | Cada evento deve ser uma linha JSON válida com `ts`, `event`, `service`, `correlation_id`, `chat_id`, `user_id` e `update_id`. |
+| R-AUD-02 | Uma mensagem deve gerar um `correlation_id` compartilhado por todos os eventos derivados. |
+| R-AUD-03 | Devem existir os eventos `session_start`, `access_denied`, `message_received`, `llm_request`, `llm_response`, `tool_call`, `command_result`, `response_sent` e `error` nos cenários aplicáveis. |
+| R-AUD-04 | `command_result` deve conter comando, `executed_argv`, alvo, `exit_code`, `timed_out`, `duration_ms`, `stdout` e `stderr`. |
+| R-AUD-05 | Tokens, chaves de API, senhas, cabeçalhos `Authorization` e blocos de chave privada devem ser substituídos por `[REDACTED]`. |
+| R-AUD-06 | A saída de leitura de caminhos sensíveis (`.env`, chaves, certificados, `/root/.ssh/`, `/etc/ssl/private/`) deve ser substituída por `[REDACTED: sensitive file]`. |
+| R-AUD-07 | O conteúdo de `write_file` não deve ser gravado; usar `content_size` e `content_sha256`. |
+| R-AUD-08 | A rotação deve ser diária e a retenção configurável; `0` não descarta eventos. |
+| R-AUD-09 | Falhas de gravação não podem interromper o atendimento do bot. |
+| R-AUD-10 | Com `AUDIT_LOG_ENABLED=false`, nenhum arquivo deve ser criado. |
 
 ## 4. Contratos funcionais
 
@@ -59,7 +88,7 @@ O `homelab-bot` **não** lê essas variáveis de usuário do `.env`: `ALLOWED_US
 | ID | Requisito | Evidência no código |
 | :--- | :--- | :--- |
 | R-COM-01 | O bot deve processar apenas mensagens de texto que não sejam comandos (`filters.TEXT & ~filters.COMMAND`). | `src/sysadmin_agent.py:254`, `src/bot.py:167` |
-| R-COM-02 | Mensagens de usuários não autorizados devem ser ignoradas silenciosamente, sem resposta. | `src/sysadmin_agent.py:185-186`, `src/bot.py:115-116` |
+| R-COM-02 | Mensagens de usuários não autorizados devem ser ignoradas silenciosamente, sem resposta; apenas o evento `access_denied` é registrado no log de auditoria. | `src/sysadmin_agent.py:334-336`, `src/bot.py:263-265` |
 | R-COM-03 | O bot deve responder no mesmo chat da mensagem recebida. | `update.message.reply_text` |
 | R-COM-04 | O processamento deve ocorrer em modo polling. | `app.run_polling()` |
 | R-COM-05 | O cliente LLM deve usar o modelo `deepseek-chat`. | `src/sysadmin_agent.py:203`, `src/bot.py:123` |
@@ -208,6 +237,20 @@ Os testes abaixo devem ser executados antes e depois de qualquer alteração. Te
 | RG-29 | `docker build .` | Build conclui sem erro |
 | RG-30 | Subida de `homelab-bot` | Container inicia e faz polling sem erro de token |
 
+### 6.5 Log de auditoria
+
+| Caso | Cenário | Resultado esperado |
+| :--- | :--- | :--- |
+| RG-31 | Mensagem autorizada | `message_received`, `llm_request`, `llm_response`, `tool_call`, `command_result` e `response_sent` com o mesmo `correlation_id` |
+| RG-32 | Comando local/SSH executado | `command_result` com comando exato, `executed_argv`, `exit_code` e duração |
+| RG-33 | Prompt com token/chave/senha | Valores substituídos por `[REDACTED]` |
+| RG-34 | Leitura de arquivo sensível | `stdout` substituído por `[REDACTED: sensitive file]` |
+| RG-35 | `write_file` | Conteúdo ausente do log; `content_size` e `content_sha256` presentes |
+| RG-36 | `AUDIT_LOG_ENABLED=false` | Nenhum arquivo criado e comportamento anterior mantido |
+| RG-37 | Falha de escrita do log | Bot continua respondendo e erro vai para stderr |
+| RG-38 | Rotação e retenção | Arquivo diário rotacionado e arquivos antigos removidos conforme configuração |
+| RG-39 | `python3 -m unittest discover -s tests -v` | Todos os testes passam |
+
 ## 7. Limitações conhecidas (não são requisitos desejáveis)
 
 Os itens abaixo descrevem o comportamento atual. Eles só podem mudar com uma decisão explícita e atualização deste documento:
@@ -218,16 +261,15 @@ Os itens abaixo descrevem o comportamento atual. Eles só podem mudar com uma de
 4. **Execução síncrona em handlers assíncronos**: chamadas ao LLM e `subprocess` bloqueiam o event loop do bot.
 5. **Sem fragmentação de mensagens**: respostas acima do limite do Telegram (4096 caracteres) podem falhar.
 6. **Sem confirmação para ações destrutivas**: o agente pode executar comandos arbitrários sem aprovação adicional.
-7. **Sem log de auditoria persistente**: prompts, respostas e comandos só aparecem nos logs padrão do container, quando registrados.
-8. **Tratamento de Markdown frágil**: saídas com caracteres especiais podem quebrar o envio com `parse_mode="Markdown"`.
-9. **Sem testes automatizados** no repositório.
+7. **Tratamento de Markdown frágil**: saídas com caracteres especiais podem quebrar o envio com `parse_mode="Markdown"`.
 
 ## 8. Critérios de aprovação da regressão
 
 Uma alteração é considerada aprovada quando:
 
-1. Todos os casos RG-01 a RG-30 aplicáveis passam.
+1. Todos os casos RG-01 a RG-39 aplicáveis passam.
 2. Nenhuma variável de ambiente obrigatória muda de nome ou semântica sem atualização do README e do `.env.example`.
 3. Os contratos de nome e parâmetros das ferramentas permanecem compatíveis, ou a mudança está documentada e coberta por novos testes.
 4. `docker build .` e `docker compose config` continuam funcionando.
 5. Segredos e chaves continuam fora do versionamento.
+6. O log de auditoria continua gravando eventos válidos, com correlação, redação e sem interromper o bot em caso de falha.
