@@ -11,8 +11,8 @@ from openai import OpenAI
 
 import audit
 
-# Carrega as variáveis do arquivo /opt/homelab-bot/.env
-load_dotenv("/opt/homelab-bot/.env")
+# Carrega as variáveis do arquivo .env (ex: /app/.env no container)
+load_dotenv()
 
 # ================= CONFIGURAÇÕES =================
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
